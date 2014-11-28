@@ -94,6 +94,8 @@ public Plugin:myinfo =
 //------------------------------------------------------------------------------------------------------------------------------------
 new Float:coords[MAX_CLIENTS][3];
 new NewTeam[MAX_CLIENTS];
+new HPtargets[MAX_CLIENTS];//global variable to store targets
+new HPcount=0;//global variable to count numebr of stored targets
 //------------------------------------------------------------------------------------------------------------------------------------
 new game = GAME_UNKNOWN;
 new bool:g_late = false;
@@ -1699,7 +1701,7 @@ public Action:Command_Speed(client, args)
 {
 	if (args < 2)
 	{
-		ReplyToCommand(client, "[SM] Usage: sm_speed <target> <multiplier>");
+		ReplyToCommand(client, "[SM] Usage: sm_speed <target> <multiplier>, 0 to reset");
 		return Plugin_Handled;	
 	}	
 	decl String:pattern[MAX_NAME],String:buffer[MAX_NAME],String:mul[MAX_ID];
@@ -1711,10 +1713,37 @@ public Action:Command_Speed(client, args)
 	new count = ProcessTargetString(pattern,client,targets,sizeof(targets),FILTER_ALIVE,buffer,sizeof(buffer),ml);
 
 	if (count <= 0) ReplyToCommand(client,"%t",(count < 0)?"Bad target":"No target",YELLOW,TEAMCOLOR,pattern,YELLOW);
+		else if(mult==0)
+	{
+		for (new n = 0; n < count; n++)
+		{
+			new t = targets[n];
+			new TFClassType:class=TF2_GetPlayerClass(t);
+			if(class==TFClass_Scout) SetEntPropFloat(t, Prop_Data, "m_flMaxspeed", 400.0);
+			else if(class==TFClass_Soldier) SetEntPropFloat(t, Prop_Data, "m_flMaxspeed", 240.0);
+			else if(class==TFClass_Pyro) SetEntPropFloat(t, Prop_Data, "m_flMaxspeed", 300.0);
+			else if(class==TFClass_DemoMan) SetEntPropFloat(t, Prop_Data, "m_flMaxspeed", 280.0);
+			else if(class==TFClass_Heavy) SetEntPropFloat(t, Prop_Data, "m_flMaxspeed", 230.0);
+			else if(class==TFClass_Engineer) SetEntPropFloat(t, Prop_Data, "m_flMaxspeed", 300.0);
+			else if(class==TFClass_Medic) SetEntPropFloat(t, Prop_Data, "m_flMaxspeed", 320.0);
+			else if(class==TFClass_Sniper) SetEntPropFloat(t, Prop_Data, "m_flMaxspeed", 300.0);
+			else if(class==TFClass_Spy) SetEntPropFloat(t, Prop_Data, "m_flMaxspeed", 300.0);
+			else ReplyToCommand(client,"Error returning player to normal speed");
+			if (!ml) Notify(client,t,"Speed Notify",mult);
+			if (g_bLog) LogAction(client,t,"\"%L\" set speed of player \"%L\" to normal",client,t);
+		}
+		if (ml) ReplyToCommand(client,"Set Speed of clients to normal");
+		return Plugin_Handled;
+	}
+	else if(mult<0||mult>520)
+	{
+		ReplyToCommand(client,"Multiplier must be between 1 and 520, 0 sets to normal");
+		return Plugin_Handled;
+	}
 	else for (new i = 0; i < count; i++)
 	{
 		new t = targets[i];
-		SetEntPropFloat(t, Prop_Data, "m_flLaggedMovementValue", mult);
+		SetEntPropFloat(t, Prop_Data, "m_flMaxspeed", mult);
 		if (!ml) Notify(client,t,"Speed Notify",mult);
 		if (g_bLog) LogAction(client,t,"\"%L\" set speed of player \"%L\" to %.1f",client,t,mult);
 	}
@@ -1784,6 +1813,22 @@ public Action:Command_HP(client, args)
 	else for (new i = 0; i < count; i++)
 	{
 		new t = targets[i];
+		new bool:found=false;
+		if(HPcount!=0)//If there is stored targets, see if current target is stored already
+		{		
+			for(new a = 0; a < HPcount; a++)
+			{
+				if(t==HPtargets[a])
+				{
+					found=true;
+				}
+			}
+		}
+		if(found==false)//If current target is not already stored, store it and add 1 to the ammount of targets stored
+		{
+			HPtargets[HPcount]=t;
+			HPcount+=1;
+		}
 		new val = GetEntProp(t, Prop_Send, "m_iHealth");
 		if ((health[0] == '+') || (health[0] == '-'))
 		{
@@ -1803,6 +1848,27 @@ public Action:Command_HP(client, args)
 	if (ml) Notify2(client,buffer,"Health Set Notify",health);
 
 	return Plugin_Handled;
+}
+public OnGameFrame()
+{
+	if(HPcount!=0)//Checks if there is stored data, skips if none
+	{
+		for (new i=0;i<HPcount; i++)//Access each stored target....
+		{
+			if (IsClientInGame(HPtargets[i])&&IsPlayerAlive(HPtargets[i]))
+			{
+				TF2_AddCondition(HPtargets[i], TFCond_Healing, 1.0); //disables overheal decay if alive and...
+			}
+			else
+			{
+				HPcount-=1;
+				for(new a=i;a<HPcount;a++)
+				{
+					HPtargets[a]=HPtargets[a+1];//removes them from the stored targets if they have died or left, to allow decay as normal
+				}
+			}
+		}
+    }
 }
 //------------------------------------------------------------------------------------------------------------------------------------
 public Action:Command_Cash(client, args)
