@@ -10,6 +10,7 @@ new String:bountiespath[]="addons/sourcemod/data/bounty/playerbounties/";
 new Handle:bountyhndl;
 new bounties=0;
 new bool:ml=false;
+new String:grammer[]="points";
 public Plugin:myinfo =
 {
 	name = "Disc-FF Bounty Event",
@@ -34,45 +35,19 @@ public OnPluginStart()
 }
 public Action:message(Handle:timer)
 {
-	new last=GetRandomInt(0,2);
-	if(last==0)
-	{
-		PrintToChatAll("\x06[Bounty]\x04Type !points to see your points");
-	}
-	if(last==1)
-	{
-		PrintToChatAll("\x06[Bounty]\x04Type !toppoints to see who has the most points");
-	}
-	if(last==2)
-	{
-		PrintToChatAll("\x06[Bounty]\x04Type /bounty to place a bounty on someone");
-	}
+	new rand=GetRandomInt(0,2);
+	if(rand==0)PrintToChatAll("\x06[Bounty]\x04Type !points to see your points");
+	if(rand==1)PrintToChatAll("\x06[Bounty]\x04Type !toppoints to see who has the most points");
+	if(rand==2)PrintToChatAll("\x06[Bounty]\x04Type /bounty to place a bounty on someone");
 	return Plugin_Continue;
 }
 public OnClientDisconnect(client)
 {
-	new String:discname[MAX_NAME_LENGTH];
-	new String:discauthid[MAX_NAME_LENGTH];
-	if(IsClientInGame(client))
-	{
-		if(!GetClientName(client,discname,sizeof(discname))) PrintToChatAll("Failed to get info");
-		if(!GetClientAuthId(client,AuthId_Steam2,discauthid, sizeof(discauthid), true)) PrintToChatAll("Failed to get info 2");
-		new String:path2[PLATFORM_MAX_PATH];
-		GetClientAuthId(client,AuthId_Steam2,discauthid, sizeof(discauthid), true);
-		Format(path2,sizeof(path2),"%s%s.txt",masterpath,discauthid);
-		ReplaceString(path2, PLATFORM_MAX_PATH, ":","-", false);
-		if(FileSize(path2)>toppoints)
-		{
-			toppoints=FileSize(path2);
-			topauthid=discauthid;
-			topname=discname;
-			foundplayer=true;
-		}
-	}
+	top_refresh(0);
 }
 public OnClientAuthorized(client,const String:auth[])
 {
-	new String:filename[PLATFORM_MAX_PATH],String:auth2[MAX_NAME_LENGTH];
+	new String:filename[PLATFORM_MAX_PATH],String:auth2[MAX_NAME_LENGTH],String:auth3[PLATFORM_MAX_PATH];
 	new Handle:dirhndl=OpenDirectory(bountiespath);
 	Format(auth2,sizeof(auth2),"%s.txt",auth);
 	ReplaceString(auth2, PLATFORM_MAX_PATH, ":","-", false);
@@ -82,12 +57,12 @@ public OnClientAuthorized(client,const String:auth[])
 		{
 			for (new a = 1; a <= MaxClients; a++)
 			{
-				if(IsClientInGame(a)&&(!IsFakeClient(a)))
-				{
-					ClientCommand(a, "playgamesound vo/Announcer_attention.wav");
-				}
+				if(IsClientInGame(a)&&(!IsFakeClient(a))) ClientCommand(a, "playgamesound vo/Announcer_attention.wav");
 			}
-			PrintHintTextToAll("A player who joined has had a bounty put on them!");
+			Format(auth3,sizeof(auth3),"%s%s",bountiespath,filename);
+			if(FileSize(auth3)==1) grammer="point";
+			else grammer="points";
+			PrintHintTextToAll("A player who joined has a bounty of %i %s!",FileSize(auth3),grammer);
 		}
 	}
 	for(new i=0;i<=bounties;i++)
@@ -96,10 +71,7 @@ public OnClientAuthorized(client,const String:auth[])
 		{
 			for (new a = 1; a <= MaxClients; a++)
 			{
-				if(IsClientInGame(a)&&(!IsFakeClient(a)))
-				{
-					ClientCommand(a, "playgamesound vo/Announcer_attention.wav");
-				}
+				if(IsClientInGame(a)&&(!IsFakeClient(a))) ClientCommand(a, "playgamesound vo/Announcer_attention.wav");
 			}
 			PrintHintTextToAll("A player with a bounty has joined!");
 		}
@@ -107,9 +79,13 @@ public OnClientAuthorized(client,const String:auth[])
 } 
 public Action:Command_toppoints(client, args)
 {
-	new String:filename[PLATFORM_MAX_PATH];
-	new String:filepath[PLATFORM_MAX_PATH];
-	new String:newtopid[MAX_NAME_LENGTH];
+	top_refresh(client);
+	return Plugin_Handled;
+}
+
+public top_refresh(client)
+{
+	new String:filename[PLATFORM_MAX_PATH], String:filepath[PLATFORM_MAX_PATH], String:newtopid[MAX_NAME_LENGTH];
 	new newpoints=0;
 	new Handle:dirhndl=OpenDirectory(masterpath);
 	while(ReadDirEntry(dirhndl,filename,sizeof(filename)))
@@ -143,26 +119,25 @@ public Action:Command_toppoints(client, args)
 			}
 		}
 	}
-	if(!foundplayer)
+	if(client!=0)
 	{
-		ReplyToCommand(client,"\x06[Bounty]\x04The offline player with the SteamID %s is in top with %i points",topauthid,toppoints);
-	}
-	else
-	{
-		ReplyToCommand(client,"\x06[Bounty]\x04%s has the most points with %i points",topname,toppoints);
+		if(toppoints==1) grammer="point";
+		else grammer="points";
+		if(!foundplayer)ReplyToCommand(client,"\x06[Bounty]\x04The offline player with the SteamID %s is in top with %i %s",topauthid,toppoints,grammer);
+		else ReplyToCommand(client,"\x06[Bounty]\x04%s has the most points with %i %s",topname,toppoints,grammer);
 	}
 	CloseHandle(dirhndl);
-	return Plugin_Handled;
 }
 public Action:Command_points(client, args) 
 {
-	new String:auth[32];
-	new String:path2[PLATFORM_MAX_PATH];
+	new String:auth[32], String:path2[PLATFORM_MAX_PATH];
 	GetClientAuthId(client,AuthId_Steam2,auth, sizeof(auth), true);
 	Format(path2,sizeof(path2),"%s%s.txt",masterpath,auth);
 	ReplaceString(path2, PLATFORM_MAX_PATH, ":","-", false);
+	if(FileSize(path2,false)==1) grammer="point";
+	else grammer="points";
 	if(!FileExists(path2,false)) PrintToChat(client,"\x06[Bounty]\x04You have 0 points! Kill people with bounties to collect points");
-	else PrintToChat(client,"\x06[Bounty]\x04You have %i points",FileSize(path2,false));
+	else PrintToChat(client,"\x06[Bounty]\x04You have %i %s",FileSize(path2,false),grammer);
 	return Plugin_Handled;
 }
 public Action:Command_bounty(client,args)
@@ -184,8 +159,7 @@ public Action:Command_bounty(client,args)
 	else if(client==targets[0]) ReplyToCommand(client,"\x06[Bounty]\x04You can't add a bounty to yourself!");
 	else
 	{
-		new String:auth[32];
-		new String:path2[PLATFORM_MAX_PATH];
+		new String:auth[32], String:path2[PLATFORM_MAX_PATH];
 		GetClientAuthId(client,AuthId_Steam2,auth, sizeof(auth), true);
 		Format(path2,sizeof(path2),"%s%s.txt",masterpath,auth);
 		ReplaceString(path2, PLATFORM_MAX_PATH, ":","-", false);
@@ -198,28 +172,21 @@ public Action:Command_bounty(client,args)
 		if(DeleteFile(path2))
 		{
 			new Handle:clientpoints=OpenFile(path2,"at");
-			for(new c=0;c<totalpoints-points;c++)
-			{
-				WriteFileString(clientpoints,"1",false);
-			}
+			for(new c=0;c<totalpoints-points;c++) WriteFileString(clientpoints,"1",false);
 			CloseHandle(clientpoints);
-			new String:targetname[MAX_NAME_LENGTH];
-			new String:targetid[32];
-			new String:targetpath[PLATFORM_MAX_PATH];
+			new String:targetname[MAX_NAME_LENGTH], String:targetid[32], String:targetpath[PLATFORM_MAX_PATH];
 			GetClientAuthId(targets[0],AuthId_Steam2,targetid, sizeof(targetid), true);
 			GetClientName(targets[0],targetname,sizeof(targetname));
 			Format(targetpath,sizeof(targetpath),"%s%s.txt",bountiespath,targetid);
 			ReplaceString(targetpath, PLATFORM_MAX_PATH, ":","-", false);
 			new Handle:targethndl=OpenFile(targetpath,"at");
-			for(new t=0;t<points;t++)
-			{
-				WriteFileString(targethndl,"1",false);
-			}
+			for(new t=0;t<points;t++)	WriteFileString(targethndl,"1",false);
 			CloseHandle(targethndl);
-			PrintToChatAll("\x06[Bounty]\x04Someone has put a bounty of %i points on %s! Kill them to collect it!",points,targetname);
+			if(points==1) grammer="point";
+			else grammer="points";
+			PrintToChatAll("\x06[Bounty]\x04Someone has put a bounty of %i %s on %s! Kill them to collect it!",points,grammer,targetname);
 		}
-		else
-		ReplyToCommand(client,"\x06[Bounty]\x04Error adding bounty");
+		else ReplyToCommand(client,"\x06[Bounty]\x04Error adding bounty");
 	}
 	return Plugin_Handled;
 }
@@ -235,12 +202,9 @@ public Event_PlayerDeath(Handle:event,const String:name[],bool:dontBroadcast)
 	new client=GetClientOfUserId(GetEventInt(event,"userid"));
 	if(attacker!=client&&attacker!=0)
 	{
-		new String:attackername[MAX_NAME_LENGTH];
-		new String:attackerid[MAX_NAME_LENGTH];
-		new String:clientname[MAX_NAME_LENGTH];
+		new String:attackername[MAX_NAME_LENGTH], String:attackerid[MAX_NAME_LENGTH], String:clientname[MAX_NAME_LENGTH], String:auth[MAX_NAME_LENGTH], String:filename[PLATFORM_MAX_PATH], String:auth2[MAX_NAME_LENGTH];
 		GetClientName(client,clientname,MAX_NAME_LENGTH);
 		GetClientName(attacker,attackername,MAX_NAME_LENGTH);
-		new String:auth[MAX_NAME_LENGTH],String:filename[PLATFORM_MAX_PATH],String:auth2[MAX_NAME_LENGTH];
 		new Handle:dirhndl=OpenDirectory(bountiespath);
 		GetClientAuthId(client, AuthId_Steam2, auth, sizeof(auth), true);
 		Format(auth2,sizeof(auth2),"%s.txt",auth);
@@ -252,16 +216,17 @@ public Event_PlayerDeath(Handle:event,const String:name[],bool:dontBroadcast)
 				new String:authpath[PLATFORM_MAX_PATH];
 				Format(authpath,sizeof(authpath),"%s%s",bountiespath,auth2);
 				new points=FileSize(authpath);
+				if(points==1) grammer="point";
+				else grammer="points";
 				for(new b=1;b<MaxClients;b++)
 				{
-					if(b!=attacker&& IsClientInGame(b)) PrintToChat(b,"\x06[Bounty]\x04%s has killed %s and collected the bounty of %i points!",attackername,clientname,points);
+					if(b!=attacker&& IsClientInGame(b)) PrintToChat(b,"\x06[Bounty]\x04%s has killed %s and collected the bounty of %i %s!",attackername,clientname,points);
 				}
-				PrintToChat(attacker,"\x06[Bounty]\x04You killed %s and collected the bounty of %i points",clientname,points);
+				PrintToChat(attacker,"\x06[Bounty]\x04You killed %s and collected the bounty of %i %s",clientname,points,grammer);
 				if(!(GetEventInt(event, "death_flags") & 32))
 				{
 					GetClientAuthId(attacker, AuthId_Steam2,attackerid, sizeof(attackerid), true);
-					new String:basepath[PLATFORM_MAX_PATH];
-					new String:basepathmaster[PLATFORM_MAX_PATH];
+					new String:basepath[PLATFORM_MAX_PATH],String:basepathmaster[PLATFORM_MAX_PATH];
 					Format(basepath,sizeof(basepath),"%s%s/%s.txt",path,auth,attackerid);
 					Format(basepathmaster,sizeof(basepathmaster),"%s%s.txt",masterpath,attackerid);
 					ReplaceString(basepath, PLATFORM_MAX_PATH, ":","-", false);
@@ -287,8 +252,7 @@ public Event_PlayerDeath(Handle:event,const String:name[],bool:dontBroadcast)
 				if(!(GetEventInt(event, "death_flags") & 32))
 				{
 					GetClientAuthId(attacker, AuthId_Steam2,attackerid, sizeof(attackerid), true);
-					new String:basepath[PLATFORM_MAX_PATH];
-					new String:basepathmaster[PLATFORM_MAX_PATH];
+					new String:basepath[PLATFORM_MAX_PATH], String:basepathmaster[PLATFORM_MAX_PATH];
 					Format(basepath,sizeof(basepath),"%s%s/%s.txt",path,auth,attackerid);
 					Format(basepathmaster,sizeof(basepathmaster),"%s%s.txt",masterpath,attackerid);
 					ReplaceString(basepath, PLATFORM_MAX_PATH, ":","-", false);
@@ -314,23 +278,17 @@ public loadbounty()
 		OpenFile("addons/sourcemod/data/bounty/bounty.txt","w");
 		bountyhndl=OpenFile("addons/sourcemod/data/bounty/bounty.txt","rt");
 	}
-	new i=0;
 	new String:linedata[32];
+	new String:loadpath[PLATFORM_MAX_PATH];
 	bounties=0;
 	while(ReadFileLine(bountyhndl,linedata,sizeof(linedata)))
 	{
 		TrimString(linedata);
-		bounty[i]=linedata;
-		i++;
-		bounties++;
-	}
-	new String:basepath[PLATFORM_MAX_PATH];
-	for(new a=0;a<i;a++)
-	{
-		basepath=path;
-		StrCat(basepath,sizeof(basepath),bounty[a]);
-		ReplaceString(basepath, PLATFORM_MAX_PATH, ":","-", false);
-		CreateDirectory(basepath,7);
+		bounty[bounties]=linedata;
+		Format(loadpath,sizeof(loadpath),"%s%s",path,linedata);
+		ReplaceString(loadpath, PLATFORM_MAX_PATH, ":","-", false);
+		CreateDirectory(loadpath,7);
+		bounties++
 	}
 	CloseHandle(bountyhndl);
 	PrintToServer("Loaded Bounties"); 
@@ -368,10 +326,8 @@ public Action:bounty_add(client, args)
 			GetClientName(t, name, MAX_NAME_LENGTH);
 			bounty[bounties]=auth;
 			bounties++;
-			if(WriteFileLine(bountyhndl,auth))
-			ReplyToCommand(client,"\x06[Bounty]\x04Added a bounty to %s",name);
-			else
-			ReplyToCommand(client,"Failure");
+			if(WriteFileLine(bountyhndl,auth)) ReplyToCommand(client,"\x06[Bounty]\x04Added a bounty to %s",name);
+			else ReplyToCommand(client,"Failure");
 			CloseHandle(bountyhndl);
 		}
 	}
