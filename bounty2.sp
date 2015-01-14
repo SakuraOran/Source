@@ -69,17 +69,13 @@ public hMenu(Handle:xmenu,MenuAction:action,param1,param2)
 }
 public Action:Command_toppoints(client, args)
 {
-	new Handle:pointsquery=INVALID_HANDLE;
-	new Handle:menu = CreateMenu(hMenu);
-	new String:Name[65],String:text[100];
+	new Handle:pointsquery=INVALID_HANDLE,Handle:menu = CreateMenu(hMenu),String:Name[65],String:text[100];
 	SetMenuTitle(menu, "Top Players");
 	pointsquery=SQL_Query(db,"SELECT Name,Points FROM Bounty ORDER BY Points DESC");
 	if (pointsquery == INVALID_HANDLE)
 	{
-		new String:error[255]
-		SQL_GetError(db, error, sizeof(error))
-		PrintToServer("Failed to query (error: %s)", error)
-		PrintToChat(client,"Error! %s",error);
+		SQL_GetError(db, Error, sizeof(Error))
+		PrintToChat(client,"Error! %s",Error);
 	}
 	else
 	{
@@ -98,16 +94,13 @@ public Action:Command_toppoints(client, args)
 }
 public Action:Command_points(client, args) 
 {
-	new String:auth[32],String:query[300];
+	new String:auth[32],String:query[300],Handle:mypoints=SQL_Query(db,query);
 	GetClientAuthId(client,AuthId_Steam2,auth, sizeof(auth), true);
 	Format(query,300,"SELECT Points FROM Bounty WHERE SteamID='%s'",auth);
-	new Handle:mypoints=SQL_Query(db,query);
 	if (mypoints == INVALID_HANDLE)
 	{
-		new String:error[255]
-		SQL_GetError(db, error, sizeof(error))
-		PrintToServer("Failed to query (error: %s)", error)
-		PrintToChat(client,"Error! %s",error);
+		SQL_GetError(db, Error, sizeof(Error))
+		PrintToChat(client,"Error! %s",Error);
 	}
 	else
 	{
@@ -129,8 +122,7 @@ public Action:bounty_reload(client, args)
 }
 public Event_PlayerDeath(Handle:event,const String:name[],bool:dontBroadcast)
 {
-	new attacker=GetClientOfUserId(GetEventInt(event,"attacker"));
-	new client=GetClientOfUserId(GetEventInt(event,"userid"));
+	new attacker=GetClientOfUserId(GetEventInt(event,"attacker")),client=GetClientOfUserId(GetEventInt(event,"userid"));
 	if(attacker!=client&&attacker!=0)
 	{
 		new String:attackername[MAX_NAME_LENGTH], String:attackerid[MAX_NAME_LENGTH], String:clientname[MAX_NAME_LENGTH], String:auth[MAX_NAME_LENGTH];
@@ -187,10 +179,8 @@ public Action:bounty_add(client, args)
 	if (count <= 0) ReplyToCommand(client,"\x07000000[Bounty]\x04Bad target");
 	else for (new i = 0; i < count; i++)
 	{
-		new t = targets[i];
-		new String:auth[MAX_NAME_LENGTH]="Failure2";
+		new t = targets[i],String:auth[MAX_NAME_LENGTH]="Failure2",bool:found=false;
 		GetClientAuthId(t, AuthId_Steam2, auth, sizeof(auth), true);
-		new bool:found=false;
 		for(new a=0;a<bounties;a++)
 		{
 			if(StrEqual(auth,bounty[a]))
