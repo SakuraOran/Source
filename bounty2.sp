@@ -17,7 +17,7 @@ public Plugin:myinfo =
 };
 public OnPluginStart()
 {
-	db = SQL_DefConnect(Error, sizeof(Error));
+	db = SQL_Connect("bounty",false,Error, sizeof(Error));
 	if (db == INVALID_HANDLE) PrintToServer("Could not connect: %s", Error)
 	if(SQL_FastQuery(db,"CREATE TABLE Bounty(ID int, SteamID varchar(30), Name varchar(60), Points int, PRIMARY KEY (SteamID))")) PrintToServer("Bounty table created successfully.");
 	CreateTimer(180.0,message, _,TIMER_REPEAT);
@@ -94,9 +94,10 @@ public Action:Command_toppoints(client, args)
 }
 public Action:Command_points(client, args) 
 {
-	new String:auth[32],String:query[300],Handle:mypoints=SQL_Query(db,query);
+	new String:auth[32],String:query[300];
 	GetClientAuthId(client,AuthId_Steam2,auth, sizeof(auth), true);
 	Format(query,300,"SELECT Points FROM Bounty WHERE SteamID='%s'",auth);
+	new Handle:mypoints=SQL_Query(db,query);
 	if (mypoints == INVALID_HANDLE)
 	{
 		SQL_GetError(db, Error, sizeof(Error))
