@@ -1,5 +1,5 @@
 #include <sourcemod>
-new String:bounty[10][32];
+new String:bounty[50][32];
 new Handle:bountyhndl;
 new bounties=0;
 new bool:ml=false;
@@ -7,6 +7,8 @@ new String:Error[255];
 new String:path[]="addons/sourcemod/data/bounty/";
 new String:grammer[]="points";
 new Handle:db=INVALID_HANDLE;
+new Handle:bountyMethod=INVALID_HANDLE;
+new AdminFlag:bountyFlag=Admin_Custom6;
 public Plugin:myinfo =
 {
 	name = "Disc-FF Bounty Event",
@@ -24,8 +26,10 @@ public OnPluginStart()
 	CreateDirectory(path,7);
 	RegConsoleCmd("sm_points", Command_points, "Get your bounty points!");
 	RegConsoleCmd("sm_toppoints", Command_toppoints, "See who has the most bounty points!");
+	RegConsoleCmd("sm_bounty", Command_bounty, "See which players have a bounty on them!");
 	RegAdminCmd("sm_reload_bounty",bounty_reload,ADMFLAG_ROOT,"Reload players with bounty");
 	RegAdminCmd("sm_add_bounty",bounty_add,ADMFLAG_ROOT,"Add players to bounty");
+	bountyMethod=CreateConVar("bounty_method", "1", "Sets way bounties get added. 0=Bounty list(SteamID) 1=Flag and bounty list 2=Flag only", 0, true, 0.0, true, 2.0);
 	HookEvent("player_death", Event_PlayerDeath);
 	loadbounty();
 }
@@ -34,6 +38,7 @@ public Action:message(Handle:timer)
 	new rand=GetRandomInt(0,2);
 	if(rand==0)PrintToChatAll("\x07000000[Bounty]\x04Type !points to see your points");
 	if(rand==1)PrintToChatAll("\x07000000[Bounty]\x04Type !toppoints to see who has the most points");
+	if(rand==2)PrintToChatAll("\x07000000[Bounty]\x04Type !bounty to see who has a bounty on them");
 	return Plugin_Continue;
 }
 public OnClientDisconnect(client)
@@ -52,15 +57,35 @@ public OnClientAuthorized(client,const String:auth[])
 	SQL_EscapeString(db,name,NewName,100);
 	Format(query,300,"INSERT INTO Bounty (Name,SteamID,Points) VALUES ('%s','%s','0')",NewName,auth);
 	SQL_FastQuery(db,query);
-	for(new i=0;i<=bounties;i++)
+	new bool:exists=false;
+	if(GetConVarInt(bountyMethod)==0||GetConVarInt(bountyMethod)==1)
 	{
-		if(StrEqual(auth,bounty[i],false))
+		for(new i=0;i<=bounties;i++)
 		{
-			for (new a = 1; a <= MaxClients; a++)
+			if(StrEqual(auth,bounty[i],false))
 			{
-				if(IsClientInGame(a)&&(!IsFakeClient(a))) ClientCommand(a, "playgamesound vo/Announcer_attention.wav");
+				exists=true;
+				for (new a = 1; a <= MaxClients; a++)
+				{
+					if(IsClientInGame(a)&&(!IsFakeClient(a))) ClientCommand(a, "playgamesound vo/Announcer_attention.wav");
+				}
+				PrintToChatAll("A player with a bounty has joined!");
 			}
-			PrintHintTextToAll("A player with a bounty has joined!");
+		}
+	}
+	else if(GetConVarInt(bountyMethod)==1||GetConVarInt(bountyMethod)==2)
+	{
+		if(GetAdminFlag(GetUserAdmin(client),bountyFlag,Access_Effective))
+		{
+			PrintToChatAll("flagmatch1");
+			if(!exists)
+			{
+				for (new a = 1; a <= MaxClients; a++)
+				{
+					if(IsClientInGame(a)&&(!IsFakeClient(a))) ClientCommand(a, "playgamesound vo/Announcer_attention.wav");
+				}
+				PrintToChatAll("A player with a bounty has joined!");
+			}
 		}
 	}
 }
@@ -121,6 +146,58 @@ public Action:bounty_reload(client, args)
 	ReplyToCommand(client,"\x07000000[Bounty]\x04Reloaded Bounties");
 	return Plugin_Handled;
 }
+ stock GetRealClientCount( bool:inGameOnly = true ) 
+ {
+	new clients = 0;
+ 	for( new i = 1; i <= MaxClients; i++ ) 
+	{
+ 		if( ( IsClientInGame( i ) && IsClientConnected( i ) ) && !IsFakeClient( i ) ) 
+		{
+ 			clients++;
+ 		}
+ 	}
+	return clients;
+}
+public Action:Command_bounty(client, args)
+{
+	new String:auth[32];
+	PrintToChat(client,"\x07000000[Bounty]\x04Current players with bounties:");
+	for(new i=1;i<=32;i++)
+	{
+		auth="";
+		if((IsClientInGame(i)&&IsClientConnected(i))&&!IsFakeClient(i))
+		{
+			GetClientAuthId(i,AuthId_Steam2,auth, sizeof(auth), true);
+			new bool:exists=false;
+			if(GetConVarInt(bountyMethod)==0||GetConVarInt(bountyMethod)==1)
+			{
+				for(new a=0;a<=bounties;a++)
+				{
+					if(StrEqual(auth,bounty[a],false))
+					{
+						new String:name[MAX_NAME_LENGTH];
+						GetClientName(i,name,MAX_NAME_LENGTH);
+						PrintToChat(client,"\x07000000[Bounty]\x04%s",name);
+						exists=true;
+					}
+				}
+			}
+			if(GetConVarInt(bountyMethod)==1||GetConVarInt(bountyMethod)==2)
+			{
+				if(GetAdminFlag(GetUserAdmin(i),bountyFlag,Access_Effective))
+				{
+					if(!exists)
+					{
+						new String:name[MAX_NAME_LENGTH];
+						GetClientName(i,name,MAX_NAME_LENGTH);
+						PrintToChat(client,"\x07000000[Bounty]\x04%s",name);
+					}
+				}
+			}
+		}
+	}
+	return Plugin_Handled;
+}
 public Event_PlayerDeath(Handle:event,const String:name[],bool:dontBroadcast)
 {
 	new attacker=GetClientOfUserId(GetEventInt(event,"attacker")),client=GetClientOfUserId(GetEventInt(event,"userid"));
@@ -130,17 +207,39 @@ public Event_PlayerDeath(Handle:event,const String:name[],bool:dontBroadcast)
 		GetClientName(client,clientname,MAX_NAME_LENGTH);
 		GetClientName(attacker,attackername,MAX_NAME_LENGTH);
 		GetClientAuthId(client, AuthId_Steam2, auth, sizeof(auth), true);
-		for(new i=0;i<=bounties;i++)
+		new bool:exists=false;
+		if(GetConVarInt(bountyMethod)==0||GetConVarInt(bountyMethod)==1)
 		{
-			if(StrEqual(auth,bounty[i],false))
+			for(new i=0;i<=bounties;i++)
 			{
-				PrintToChat(attacker,"\x07000000[Bounty]\x04You got 1 point for killing %s",clientname);
-				if(!(GetEventInt(event, "death_flags") & 32))
+				if(StrEqual(auth,bounty[i],false))
 				{
-					GetClientAuthId(attacker, AuthId_Steam2,attackerid, sizeof(attackerid), true);
-					new String:query[200];
-					Format(query,200,"UPDATE Bounty SET Points=Points+1,Name='%s' WHERE SteamID='%s'",attackername,attackerid);
-					SQL_Query(db,query);
+					PrintToChat(attacker,"\x07000000[Bounty]\x04You got 1 point for killing %s",clientname);
+					exists=true;
+					if(!(GetEventInt(event, "death_flags") & 32))
+					{
+						GetClientAuthId(attacker, AuthId_Steam2,attackerid, sizeof(attackerid), true);
+						new String:query[200];
+						Format(query,200,"UPDATE Bounty SET Points=Points+1,Name='%s' WHERE SteamID='%s'",attackername,attackerid);
+						SQL_Query(db,query);
+					}
+				}
+			}
+		}
+		else if(GetConVarInt(bountyMethod)==1||GetConVarInt(bountyMethod)==2)
+		{
+			if(GetAdminFlag(GetUserAdmin(client),bountyFlag,Access_Effective))
+			{
+				if(!exists)
+				{
+					PrintToChat(attacker,"\x07000000[Bounty]\x04You got 1 point for killing %s",clientname);
+					if(!(GetEventInt(event, "death_flags") & 32))
+					{
+						GetClientAuthId(attacker, AuthId_Steam2,attackerid, sizeof(attackerid), true);
+						new String:query[200];
+						Format(query,200,"UPDATE Bounty SET Points=Points+1,Name='%s' WHERE SteamID='%s'",attackername,attackerid);
+						SQL_Query(db,query);
+					}
 				}
 			}
 		}
@@ -161,7 +260,7 @@ public loadbounty()
 	{
 		TrimString(linedata);
 		bounty[bounties]=linedata;
-		bounties++
+		bounties++;
 	}
 	CloseHandle(bountyhndl);
 	PrintToServer("Loaded Bounties"); 
