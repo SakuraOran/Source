@@ -29,6 +29,7 @@ public OnPluginStart()
 	RegConsoleCmd("sm_bounty", Command_bounty, "See which players have a bounty on them!");
 	RegAdminCmd("sm_reload_bounty",bounty_reload,ADMFLAG_ROOT,"Reload players with bounty");
 	RegAdminCmd("sm_add_bounty",bounty_add,ADMFLAG_ROOT,"Add players to bounty");
+	RegAdminCmd("sm_remove_bounty",bounty_remove,ADMFLAG_ROOT,"Remove players from bounty");
 	bountyMethod=CreateConVar("bounty_method", "1", "Sets way bounties get added. 0=Bounty list(SteamID) 1=Flag and bounty list 2=Flag only", 0, true, 0.0, true, 2.0);
 	HookEvent("player_death", Event_PlayerDeath);
 	loadbounty();
@@ -226,7 +227,7 @@ public Event_PlayerDeath(Handle:event,const String:name[],bool:dontBroadcast)
 				}
 			}
 		}
-		else if(GetConVarInt(bountyMethod)==1||GetConVarInt(bountyMethod)==2)
+		if(GetConVarInt(bountyMethod)==1||GetConVarInt(bountyMethod)==2)
 		{
 			if(GetAdminFlag(GetUserAdmin(client),bountyFlag,Access_Effective))
 			{
@@ -299,6 +300,61 @@ public Action:bounty_add(client, args)
 			if(WriteFileLine(bountyhndl,auth)) ReplyToCommand(client,"\x07000000[Bounty]\x04Added a bounty to %s",name);
 			else ReplyToCommand(client,"Failure");
 			CloseHandle(bountyhndl);
+		}
+	}
+	return Plugin_Handled;
+}
+public Action:bounty_remove(client,args)
+{
+	if (args < 1)
+	{
+		ReplyToCommand(client, "\x07000000[Bounty]\x04Usage: sm_remove_bounty <target>");
+		return Plugin_Handled;
+	}
+	decl String:pattern[MAX_NAME_LENGTH],String:buffer[MAX_NAME_LENGTH];
+	GetCmdArg(1,pattern,sizeof(pattern));
+	new targets[32];
+	new count = ProcessTargetString(pattern,client,targets,sizeof(targets),COMMAND_FILTER_CONNECTED,buffer,sizeof(buffer),ml);
+	if (count <= 0) ReplyToCommand(client,"\x07000000[Bounty]\x04Bad target");
+	else for (new i = 0; i < count; i++)
+	{
+		new t = targets[i],String:auth[MAX_NAME_LENGTH]="Failure2",bool:found=false;
+		GetClientAuthId(t, AuthId_Steam2, auth, sizeof(auth), true);
+		for(new a=0;a<bounties;a++)
+		{
+			if(StrEqual(auth,bounty[a])) found=true;
+		}
+		if(!found)ReplyToCommand(client,"\x07000000[Bounty]\x04User doesn't have a bounty!");
+		else
+		{
+			new line=0;
+			new String:linedata[32];
+			bountyhndl=OpenFile("addons/sourcemod/data/bounty/bounty.txt","rt");
+			while(ReadFileLine(bountyhndl,linedata,sizeof(linedata)))
+			{
+				TrimString(linedata);
+				if(StrEqual(linedata,auth))break;
+				line++;
+			}
+			CloseHandle(bountyhndl);
+			bounties-=1;
+			for(new a=line;a<bounties;a++)
+			{
+				bounty[a]=bounty[a+1];//removes them from the stored targets if they have died or left, to allow decay as normal
+			}
+			bounty[bounties]="";
+			DeleteFile("addons/sourcemod/data/bounty/bounty.txt");
+			OpenFile("addons/sourcemod/data/bounty/bounty.txt","w");
+			bountyhndl=OpenFile("addons/sourcemod/data/bounty/bounty.txt","rt");
+			bountyhndl=OpenFile("addons/sourcemod/data/bounty/bounty.txt","at");
+			new String:name[MAX_NAME_LENGTH];
+			GetClientName(t, name, MAX_NAME_LENGTH);
+			for(new a=0;a<bounties;a++)
+			{
+				if(!WriteFileLine(bountyhndl,auth))ReplyToCommand(client,"Failure");
+			}
+			CloseHandle(bountyhndl);
+			ReplyToCommand(client,"\x07000000[Bounty]\x04Removed bounty from %s",name);
 		}
 	}
 	return Plugin_Handled;
