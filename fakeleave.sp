@@ -12,6 +12,7 @@ public OnPluginStart()
 		}
 	}
 	RegAdminCmd("sm_fakeleave",Command_fakeLeave,ADMFLAG_BAN,"Fake leave the server");
+	RegAdminCmd("sm_rejoin",Command_rejoin,ADMFLAG_BAN,"Show yourself after fake leaving");
 }
 public OnMapStart() 
 {
@@ -38,6 +39,11 @@ public Action:Command_fakeLeave(client,args)
 	PrintToChatAll("\x04%s\x01<\x03%s\x01> disconnected.",name,auth);
 	ChangeClientTeam(client, 1);
 	isPlayerConnected[client]=false;
+	return Plugin_Handled;
+}
+public Action:Command_rejoin(client,args)
+{
+	isPlayerConnected[client]=true;
 	return Plugin_Handled;
 }
 public Hook_OnThinkPost(iEnt) 
