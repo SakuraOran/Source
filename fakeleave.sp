@@ -38,12 +38,15 @@ public Action:Command_fakeLeave(client,args)
 	GetClientAuthId(client, AuthId_Steam2, auth, sizeof(auth), true);
 	PrintToChatAll("\x04%s\x01<\x03%s\x01> disconnected.",name,auth);
 	ChangeClientTeam(client, 1);
+	ClientCommand(client, "sm_admins 0");
 	isPlayerConnected[client]=false;
 	return Plugin_Handled;
 }
 public Action:Command_rejoin(client,args)
 {
 	isPlayerConnected[client]=true;
+	ClientCommand(client, "sm_admins 1");
+	ClientCommand(client, "jointeam random");
 	return Plugin_Handled;
 }
 public Hook_OnThinkPost(iEnt) 
