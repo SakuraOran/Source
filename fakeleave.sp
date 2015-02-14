@@ -29,9 +29,9 @@ public OnClientDisconnect(client)
 {
 	isPlayerConnected[client]=false;
 }
-public Action:OnClientSayCommand(client, const String:command[], const String:sArgs[])
+public Action:OnClientSayCommand(client, const String:command[], const String:args[])
 {
-	if(StrContains(command,"fakeleave",false))
+	if(StrContains(args,"fakeleave",false)>=0)
 	{
 		if (GetAdminFlag(GetUserAdmin(client), Admin_Ban,Access_Effective))
 		{
@@ -39,7 +39,7 @@ public Action:OnClientSayCommand(client, const String:command[], const String:sA
 		}
 		return Plugin_Handled;
 	}
-	if(StrContains(command,"rejoin",false))
+	else if(StrContains(args,"rejoin",false)>=0)
 	{
 		if (GetAdminFlag(GetUserAdmin(client), Admin_Ban,Access_Effective))
 		{
@@ -49,7 +49,7 @@ public Action:OnClientSayCommand(client, const String:command[], const String:sA
 	}
 	return Plugin_Continue;
 }
-public fakeLeave(client)
+fakeLeave(client)
 {
 	new String:auth[MAX_NAME_LENGTH];
 	GetClientAuthId(client, AuthId_Steam2, auth, sizeof(auth), true);
@@ -59,7 +59,7 @@ public fakeLeave(client)
 	isPlayerConnected[client]=false;
 }
 
-public rejoin(client)
+rejoin(client)
 {
 	isPlayerConnected[client]=true;
 	ClientCommand(client, "sm_admins 1");
