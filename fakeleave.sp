@@ -51,7 +51,7 @@ public Action:OnClientSayCommand(client, const String:command[], const String:sA
 }
 public fakeLeave(client)
 {
-	new String:auth[MAX_NAME_LENGTH],String:name[MAX_NAME_LENGTH];
+	new String:auth[MAX_NAME_LENGTH];
 	GetClientAuthId(client, AuthId_Steam2, auth, sizeof(auth), true);
 	PrintToChatAll("\x04%N\x01<\x03%s\x01> disconnected.",client,auth);
 	ChangeClientTeam(client, 1);
