@@ -11,8 +11,6 @@ public OnPluginStart()
 			isPlayerConnected[i] = true;
 		}
 	}
-	RegAdminCmd("sm_fakeleave",Command_fakeLeave,ADMFLAG_BAN,"Fake leave the server");
-	RegAdminCmd("sm_rejoin",Command_rejoin,ADMFLAG_BAN,"Show yourself after fake leaving");
 }
 public OnMapStart() 
 {
@@ -31,7 +29,27 @@ public OnClientDisconnect(client)
 {
 	isPlayerConnected[client]=false;
 }
-public Action:Command_fakeLeave(client,args)
+public Action:OnClientSayCommand(client, const String:command[], const String:sArgs[])
+{
+	if(StrContains(command,"fakeleave",false))
+	{
+		if (GetAdminFlag(GetUserAdmin(client), Admin_Ban,Access_Effective))
+		{
+			fakeLeave(client);
+		}
+		return Plugin_Handled;
+	}
+	if(StrContains(command,"rejoin",false))
+	{
+		if (GetAdminFlag(GetUserAdmin(client), Admin_Ban,Access_Effective))
+		{
+			rejoin(client);
+		}
+		return Plugin_Handled;
+	}
+	return Plugin_Continue;
+}
+public fakeLeave(client)
 {
 	new String:auth[MAX_NAME_LENGTH],String:name[MAX_NAME_LENGTH];
 	GetClientName(client,name,sizeof(name));
@@ -40,14 +58,13 @@ public Action:Command_fakeLeave(client,args)
 	ChangeClientTeam(client, 1);
 	ClientCommand(client, "sm_admins 0");
 	isPlayerConnected[client]=false;
-	return Plugin_Handled;
 }
-public Action:Command_rejoin(client,args)
+
+public rejoin(client)
 {
 	isPlayerConnected[client]=true;
 	ClientCommand(client, "sm_admins 1");
 	ClientCommand(client, "jointeam random");
-	return Plugin_Handled;
 }
 public Hook_OnThinkPost(iEnt) 
 {
