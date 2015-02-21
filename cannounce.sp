@@ -29,6 +29,7 @@
 #include <sourcemod>
 #include <sdktools>
 #include <geoip>
+#include <sdkhooks>
 #undef REQUIRE_EXTENSIONS
 #include <geoipcity>
 #undef REQUIRE_PLUGIN
@@ -50,10 +51,8 @@ new Handle:hTopMenu = INVALID_HANDLE;
 new String:g_fileset[128];
 new String:g_filesettings[128];
 new bool:g_UseGeoIPCity = false;
-new Handle:event1=INVALID_HANDLE;
-new String:name1[MAX_NAME_LENGTH];
-new String:auth1[MAX_NAME_LENGTH];
 new Handle:g_CvarConnectDisplayType = INVALID_HANDLE;
+new bool:isPlayerConnected[MAXPLAYERS+1]={false,...};
 /*****************************************************************
 
 
@@ -132,7 +131,13 @@ public OnPluginStart()
 	
 	//create config file if not exists
 	AutoExecConfig(true, "cannounce");
-	RegServerCmd("is_PlayerConnected",callback_recieve,"");
+	for(new i=1; i <= MaxClients; i++) 
+	{
+		if(IsClientConnected(i)) 
+		{
+			isPlayerConnected[i] = true;
+		}
+	}
 }
 public OnMapStart()
 {
@@ -142,7 +147,12 @@ public OnMapStart()
 	//precahce and set downloads for sounds files for all players
 	LoadSoundFilesAll();
 	
-	
+	new playerresource = -1;
+	playerresource = FindEntityByClassname(playerresource, "tf_player_manager");
+	if (playerresource != INVALID_ENT_REFERENCE) 
+	{
+		SDKHook(playerresource, SDKHook_ThinkPost, Hook_OnThinkPost);
+	}
 	OnMapStart_JoinMsg();
 }
 
@@ -158,7 +168,10 @@ public OnClientAuthorized(client, const String:auth[])
 		}
 	}
 }
-
+public OnClientPutInServer(client)
+{
+	isPlayerConnected[client]=true;
+}
 public OnClientPostAdminCheck(client)
 {
 	decl String:auth[32];
@@ -175,7 +188,39 @@ public OnClientPostAdminCheck(client)
 		}
 	}	
 }
-
+public Action:OnClientSayCommand(client, const String:command[], const String:args[])
+{
+	if(StrContains(args,"fakeleave",false)>=0)
+	{
+		if (GetAdminFlag(GetUserAdmin(client), Admin_Ban,Access_Effective))
+		{
+			if(isPlayerConnected[client]==false)
+			{
+				PrintToChat(client,"FakeLeave: You are already hidden. Type /rejoin to come back");
+			}
+			else fakeLeave(client);
+		}
+		return Plugin_Handled;
+	}
+	else if(StrContains(args,"rejoin",false)>=0)
+	{
+		if (GetAdminFlag(GetUserAdmin(client), Admin_Ban,Access_Effective))
+		{
+			if(isPlayerConnected[client]==true)
+			{
+				PrintToChat(client,"FakeLeave: You are already visible. Type /fakeleave to hide");
+			}
+			else rejoin(client);
+		}
+		return Plugin_Handled;
+	}
+	else if(isPlayerConnected[client]==false)
+	{
+		PrintToChat(client,"FakeLeave: You are hidden and can not use chat. Please use /rejoin to come back first");
+		return Plugin_Handled;
+	}
+	return Plugin_Continue;
+}
 public OnPluginEnd()
 {		
 	OnPluginEnd_JoinMsg();
@@ -183,7 +228,37 @@ public OnPluginEnd()
 	OnPluginEnd_CountryShow();
 }
 
+fakeLeave(client)
+{
+	new String:auth[MAX_NAME_LENGTH];
+	GetClientAuthId(client, AuthId_Steam2, auth, sizeof(auth), true);
+	PrintToChatAll("\x04%N\x01<\x03%s\x01> disconnected.",client,auth);
+	ChangeClientTeam(client, 1);
+	ClientCommand(client, "sm_admins 0");
+	SetClientListeningFlags(client, VOICE_MUTED);
+	isPlayerConnected[client]=false;
+}
 
+rejoin(client)
+{
+	isPlayerConnected[client]=true;
+	ClientCommand(client, "sm_admins 1");
+	ClientCommand(client, "jointeam random");
+	new String:auth[MAX_NAME_LENGTH];
+	GetClientAuthId(client,AuthId_Steam2,auth,sizeof(auth),true);
+	OnPostAdminCheck_CountryShow(client);
+	OnPostAdminCheck_JoinMsg(auth);
+	SetClientListeningFlags(client, VOICE_NORMAL);
+}
+public Hook_OnThinkPost(iEnt)
+{
+	static bConnectedOffset = -1;
+	if (bConnectedOffset == -1) 
+	{
+		bConnectedOffset = FindSendPropInfo("CTFPlayerResource", "m_bConnected");
+	}
+	SetEntDataArray(iEnt, bConnectedOffset, isPlayerConnected, MaxClients+1);
+}
 public OnAdminMenuReady(Handle:topmenu)
 {
 	//Block us from being called twice
@@ -230,14 +305,18 @@ public OnLibraryAdded(const String:name[])
 
 ****************************************************************/
 public Action:event_PlayerDisconnect(Handle:event, const String:name[], bool:dontBroadcast)
-{
-	event1=event;
-	new client = GetClientOfUserId(GetEventInt(event1, "userid"));
-	GetClientAuthId(client, AuthId_Steam2, auth1, sizeof(auth1), true);
-	GetClientName(client,name1,sizeof(name1));
-	if(client && !IsFakeClient(client) && !dontBroadcast)
-		ServerCommand("is_SendClient %d",client);
-	return event_PlayerDisconnect_Suppress( event1, name, dontBroadcast );
+{	
+	new client = GetClientOfUserId(GetEventInt(event, "userid"));
+	
+	if( client && !IsFakeClient(client) && !dontBroadcast && isPlayerConnected[client])
+	{
+		event_PlayerDisc_CountryShow(event, name, dontBroadcast);
+		
+		OnClientDisconnect_JoinMsg();
+	}
+	
+	
+	return event_PlayerDisconnect_Suppress( event, name, dontBroadcast );
 }
 
 
@@ -504,16 +583,4 @@ GetFormattedMessage( String:rawmsg[301], client, String:outbuffer[], outbuffersi
 	}
 	
 	Format( outbuffer, outbuffersize, "%s", rawmsg );
-}
-public Action:callback_recieve(args)
-{
-	new String:arg1[10];
-	GetCmdArg(1,arg1,10);
-	new connected=StringToInt(arg1);
-	if(connected)
-	{
-		PrintToChatAll("\x04%s\x01<\x03%s\x01> disconnected.",name1,auth1);
-		OnClientDisconnect_JoinMsg();
-	}
-	return Plugin_Handled;
 }
